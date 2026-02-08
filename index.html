@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bible Journal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -13,6 +13,8 @@
         body {
             font-family: 'Inter', sans-serif;
             overflow: hidden;
+            touch-action: manipulation;
+            overscroll-behavior: none;
         }
 
         .editor-container {
@@ -70,8 +72,6 @@
             padding: 0;
             margin: 0;
             display: inline;
-            cursor: pointer;
-            pointer-events: auto;
         }
 
         .theme-dark .verse-highlight {
@@ -88,7 +88,7 @@
             z-index: 9999 !important;
             pointer-events: auto !important;
             opacity: 1 !important;
-            transition: transform 0.1s ease-out, opacity 0.2s ease;
+            transition: opacity 0.2s ease;
             cursor: default;
         }
 
@@ -109,6 +109,7 @@
 
         .expanded-content-area {
             user-select: text !important;
+            -webkit-overflow-scrolling: touch;
         }
 
         [hidden] { display: none !important; }
@@ -118,7 +119,6 @@
 
 <div id="app" class="min-h-screen p-2 md:p-4 flex flex-col">
     <div class="max-w-5xl mx-auto h-full flex flex-col w-full flex-grow">
-        <!-- Header -->
         <header class="flex flex-row items-center justify-between px-1 pt-1 pb-4 flex-shrink-0">
             <div class="flex items-center gap-2">
                 <div class="bg-indigo-600 p-1.5 rounded shadow-md">
@@ -134,7 +134,7 @@
                 <input type="file" id="fileInput" accept=".csv,.txt" class="hidden" />
                 <button id="uploadBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm bg-slate-900 text-white border-slate-800 hover:border-indigo-500">
                     <i data-lucide="upload" id="uploadIcon" class="w-3.5 h-3.5"></i>
-                    <span class="hidden sm:inline" id="uploadText">Upload CSV</span>
+                    <span class="hidden sm:inline" id="uploadText">Upload Bible CSV</span>
                 </button>
                 <button id="copyNotesBtn" class="p-1.5 rounded-lg border shadow-sm transition-all active:scale-95 bg-slate-900 text-white border-slate-800 hover:border-indigo-500">
                     <i data-lucide="copy" class="w-[18px] h-[18px]"></i>
@@ -144,10 +144,9 @@
 
         <div class="h-px w-full mb-2 flex-shrink-0 bg-slate-800" id="divider"></div>
 
-        <!-- Editor -->
         <div class="editor-container h-[calc(100vh-120px)]">
             <div id="backdrop" aria-hidden="true" class="editor-shared backdrop custom-scrollbar"></div>
-            <textarea id="editor" class="editor-shared custom-scrollbar" spellcheck="false" placeholder="Start typing your study notes here... Mention a verse like Juan 1:1 to see it."></textarea>
+            <textarea id="editor" class="editor-shared custom-scrollbar" spellcheck="false" placeholder="Start study... (e.g. Juan 1:1)"></textarea>
         </div>
     </div>
 
@@ -168,10 +167,10 @@
                     <span id="expandedRef" class="text-lg font-black text-indigo-500 uppercase tracking-tight"></span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button id="quoteBtn" title="Insert quote to notes" class="p-2 rounded-lg transition-all active:scale-90">
+                    <button id="quoteBtn" title="Insert quote" class="p-2 rounded-lg transition-all active:scale-90">
                         <i data-lucide="message-square-quote" class="w-5 h-5"></i>
                     </button>
-                    <button id="copyVerseBtn" title="Copy selection or verse" class="p-2 rounded-lg transition-all active:scale-90">
+                    <button id="copyVerseBtn" title="Copy verse" class="p-2 rounded-lg transition-all active:scale-90">
                         <i data-lucide="copy" class="w-5 h-5"></i>
                     </button>
                     <button id="closeBtn" class="transition-colors p-2 rounded-lg">
@@ -190,7 +189,6 @@
 </div>
 
 <script>
-    // Bible Book Mapping
     const BOOK_MAP = {
         'genesis': 1, 'gen': 1, 'exodo': 2, 'exodus': 2, 'exo': 2, 'levitico': 3, 'leviticus': 3, 'lev': 3, 'bilang': 4, 'numbers': 4, 'num': 4, 'deuteronomio': 5, 'deuteronomy': 5, 'deut': 5,
         'josue': 6, 'joshua': 6, 'jos': 6, 'hukom': 7, 'judges': 7, 'jdg': 7, 'ruth': 8, 'rut': 8, 'isamuel': 9, '1samuel': 9, '1sam': 9, 'iisamuel': 10, '2samuel': 10, '2sam': 10,
@@ -229,6 +227,7 @@
     
     let isDragging = false, isResizing = false;
     let interactionOffset = { x: 0, y: 0, w: 0, h: 0 };
+    let currentWidth = window.innerWidth;
 
     // DOM Elements
     const editor = document.getElementById('editor');
@@ -262,7 +261,6 @@
         applyTheme();
         renderBackdrop();
         
-        // Listeners
         editor.addEventListener('input', e => { 
             content = e.target.value; 
             localStorage.setItem('bibleJournalContent', content);
@@ -282,7 +280,7 @@
         
         expandBtn.addEventListener('click', expandVerse);
         compactRef.addEventListener('click', expandVerse);
-        closeBtn.addEventListener('click', hideTooltip);
+        closeBtn.addEventListener('click', (e) => { e.stopPropagation(); hideTooltip(); });
         quoteBtn.addEventListener('click', handleQuote);
         copyVerseBtn.addEventListener('click', handleCopyVerse);
 
@@ -295,20 +293,27 @@
         window.addEventListener('touchmove', onMouseMove, { passive: false });
         window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('touchend', onMouseUp);
-        window.addEventListener('resize', () => { if(tooltipState.visible) hideTooltip(); });
+        
+        // Prevent system context menu in expanded view for mobile
+        expandedContent.oncontextmenu = (e) => {
+            if (tooltipState.expanded) e.preventDefault();
+        };
+
+        window.addEventListener('resize', () => { 
+            if (window.innerWidth !== currentWidth) {
+                currentWidth = window.innerWidth;
+                if(tooltipState.visible) hideTooltip(); 
+            }
+        });
     }
 
-    // Surgical Icon Update
     function updateIcon(buttonEl, iconName, colorClass = '') {
         const iconEl = buttonEl.querySelector('[data-lucide]');
         if (!iconEl) return;
         iconEl.setAttribute('data-lucide', iconName);
         iconEl.className = `w-full h-full transition-colors ${colorClass}`;
-        iconEl.innerHTML = ''; // Clear existing SVG
-        lucide.createIcons({
-            attrs: { class: 'lucide-icon' },
-            nameAttr: 'data-lucide'
-        });
+        iconEl.innerHTML = '';
+        lucide.createIcons({ attrs: { class: 'lucide-icon' }, nameAttr: 'data-lucide' });
     }
 
     function toggleTheme() {
@@ -323,28 +328,22 @@
         themeToggle.className = `p-1.5 rounded-lg border transition-all active:scale-95 shadow-sm ${isDark ? 'bg-slate-900 border-slate-800 text-yellow-400' : 'bg-white border-slate-200 text-slate-700'}`;
         themeToggle.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-[18px] h-[18px]"></i>`;
         divider.className = `h-px w-full mb-2 flex-shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`;
-        
         const btnClass = isDark ? 'bg-slate-900 text-white border-slate-800 hover:border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-500';
         if (!csvLoaded) uploadBtn.className = `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${btnClass}`;
         copyNotesBtn.className = `p-1.5 rounded-lg border shadow-sm transition-all active:scale-95 ${btnClass}`;
-        
         tooltip.className = `bible-tooltip fixed rounded-xl shadow-2xl overflow-hidden border ${tooltipState.visible ? '' : 'hidden'} ${isDark ? 'bg-slate-900 text-slate-100 border-slate-800' : 'bg-white text-slate-900 border-slate-200'}`;
         tooltipHeader.className = `px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing border-b select-none flex-shrink-0 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`;
         expandedContent.className = `expanded-content-area flex-grow overflow-y-auto custom-scrollbar ${isDark ? 'bg-slate-950' : 'bg-white'}`;
-        
         const tooltipActionBtnClass = isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-200';
         quoteBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
         copyVerseBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
         closeBtn.className = `transition-colors p-2 rounded-lg ${isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'}`;
-        
         lucide.createIcons();
         renderBackdrop();
         if (tooltipState.visible && tooltipState.expanded) renderExpandedContent();
     }
 
-    function escapeHTML(str) {
-        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
-    }
+    function escapeHTML(str) { return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]); }
 
     function resolveBookId(input) {
         if (!input) return "";
@@ -373,10 +372,7 @@
 
     function renderBackdrop() {
         VERSE_REGEX.lastIndex = 0;
-        let lastIndex = 0;
-        let html = '';
-        let match;
-        const text = content;
+        let lastIndex = 0, html = '', match, text = content;
         while ((match = VERSE_REGEX.exec(text)) !== null) {
             html += escapeHTML(text.substring(lastIndex, match.index));
             html += `<span class="verse-highlight">${escapeHTML(match[0])}</span>`;
@@ -400,17 +396,11 @@
             for (let i = 0; i < rows.length; i++) {
                 const line = rows[i].trim();
                 if (!line) continue;
-                const firstD = line.indexOf(delimiter);
-                const secondD = line.indexOf(delimiter, firstD + 1);
-                const thirdD = line.indexOf(delimiter, secondD + 1);
+                const firstD = line.indexOf(delimiter), secondD = line.indexOf(delimiter, firstD + 1), thirdD = line.indexOf(delimiter, secondD + 1);
                 if (firstD === -1 || secondD === -1 || thirdD === -1) continue;
-                const book = line.substring(0, firstD).replace(/^"|"$/g, '').trim();
-                const chapterRaw = line.substring(firstD + 1, secondD).replace(/^"|"$/g, '').trim();
-                const verseNoRaw = line.substring(secondD + 1, thirdD).replace(/^"|"$/g, '').trim();
-                const verseText = line.substring(thirdD + 1).replace(/^"|"$/g, '').trim();
+                const book = line.substring(0, firstD).replace(/^"|"$/g, '').trim(), chapterRaw = line.substring(firstD + 1, secondD).replace(/^"|"$/g, '').trim(), verseNoRaw = line.substring(secondD + 1, thirdD).replace(/^"|"$/g, '').trim(), verseText = line.substring(thirdD + 1).replace(/^"|"$/g, '').trim();
                 if (i === 0 && (book.toLowerCase().includes("book") || chapterRaw.toLowerCase().includes("chap"))) continue;
-                const chapter = parseInt(chapterRaw, 10).toString();
-                const verseNo = parseInt(verseNoRaw, 10).toString();
+                const chapter = parseInt(chapterRaw, 10).toString(), verseNo = parseInt(verseNoRaw, 10).toString();
                 if (!isNaN(chapter) && !isNaN(verseNo)) {
                     const bookId = resolveBookId(book);
                     newBibleData[`${bookId}-${chapter}-${verseNo}`] = verseText;
@@ -435,16 +425,19 @@
 
     function handleInteraction(e) {
         if (e.target.closest('#tooltip')) return;
+
         const pos = editor.selectionStart;
         const text = editor.value;
         VERSE_REGEX.lastIndex = 0;
         let match, foundMatch = null, matchIdx = 0, currentMatchIdx = -1, lineEnd = -1, lineText = '';
+        
         while ((match = VERSE_REGEX.exec(text)) !== null) {
-            if (pos >= match.index && pos <= match.index + match[0].length) {
+            // Updated range check to allow a 1-character grace period (like a space)
+            // after the verse reference match.
+            if (pos >= match.index && pos <= match.index + match[0].length + 1) {
                 foundMatch = match[0];
                 currentMatchIdx = matchIdx;
-                const prevNewline = text.lastIndexOf('\n', match.index);
-                const nextNewline = text.indexOf('\n', match.index);
+                const prevNewline = text.lastIndexOf('\n', match.index), nextNewline = text.indexOf('\n', match.index);
                 const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
                 lineEnd = nextNewline === -1 ? text.length : nextNewline;
                 lineText = text.substring(lineStart, lineEnd);
@@ -452,23 +445,25 @@
             }
             matchIdx++;
         }
+
         if (foundMatch) {
+            // Behavior: clicking on any verse (even a new one while expanded)
+            // will reset the view to compact mode.
             tooltipState.ref = foundMatch;
             tooltipState.matchIndex = currentMatchIdx;
             tooltipState.lineEndIndex = lineEnd;
             tooltipState.currentLineText = lineText;
             tooltipState.visible = true;
-            tooltipState.expanded = false;
-            const spans = backdrop.querySelectorAll('.verse-highlight');
-            const target = spans[currentMatchIdx];
-            let spawnX = window.innerWidth / 2 - 90, spawnY = window.innerHeight / 2;
+            tooltipState.expanded = false; 
+            
+            const target = backdrop.querySelectorAll('.verse-highlight')[currentMatchIdx];
             if (target) {
                 const rect = target.getBoundingClientRect();
-                spawnX = rect.left + (rect.width / 2) - 90;
-                spawnY = rect.top - 52;
+                const spawnX = rect.left + (rect.width / 2) - 90;
+                const spawnY = rect.top - 52;
+                tooltipState.x = Math.max(10, Math.min(spawnX, window.innerWidth - 190));
+                tooltipState.y = Math.max(10, spawnY);
             }
-            tooltipState.x = Math.max(10, Math.min(spawnX, window.innerWidth - 190));
-            tooltipState.y = Math.max(10, spawnY);
             showTooltip();
         } else {
             hideTooltip();
@@ -481,6 +476,7 @@
         tooltip.style.width = tooltipState.expanded ? tooltipState.width + 'px' : 'auto';
         tooltip.style.height = tooltipState.expanded ? tooltipState.height + 'px' : 'auto';
         tooltip.classList.remove('hidden');
+        
         if (!tooltipState.expanded) {
             tooltipCompact.classList.remove('hidden');
             tooltipExpanded.classList.add('hidden');
@@ -494,25 +490,26 @@
         }
     }
 
-    function hideTooltip() { tooltipState.visible = false; tooltip.classList.add('hidden'); }
+    function hideTooltip() { 
+        tooltipState.visible = false; 
+        tooltipState.expanded = false;
+        tooltip.classList.add('hidden'); 
+    }
 
-    function expandVerse() {
+    function expandVerse(e) {
+        if (e) { e.stopPropagation(); e.preventDefault(); }
         tooltipState.expanded = true;
-        const spans = backdrop.querySelectorAll('.verse-highlight');
-        const target = spans[tooltipState.matchIndex];
+        const target = backdrop.querySelectorAll('.verse-highlight')[tooltipState.matchIndex];
         if (target) {
             const rect = target.getBoundingClientRect();
-            tooltipState.y = rect.bottom + 12;
-            tooltipState.x = rect.left + (rect.width / 2) - (tooltipState.width / 2);
+            tooltipState.y = Math.min(rect.bottom + 12, window.innerHeight - tooltipState.height - 10);
+            tooltipState.x = Math.max(10, Math.min(rect.left + (rect.width / 2) - (tooltipState.width / 2), window.innerWidth - tooltipState.width - 10));
         }
-        tooltipState.x = Math.max(10, Math.min(tooltipState.x, window.innerWidth - tooltipState.width - 10));
-        if (tooltipState.y + tooltipState.height > window.innerHeight) tooltipState.y = window.innerHeight - tooltipState.height - 10;
         showTooltip();
     }
 
     function renderExpandedContent() {
-        const parsed = parseVerseRef(tooltipState.ref);
-        const bookName = parsed ? (DISPLAY_NAMES[parsed.bookId] || parsed.bookId) : "Unknown";
+        const parsed = parseVerseRef(tooltipState.ref), bookName = parsed ? (DISPLAY_NAMES[parsed.bookId] || parsed.bookId) : "Unknown";
         expandedRef.innerText = parsed ? (parsed.verseEnd ? `${bookName} ${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}` : `${bookName} ${parsed.chapter}:${parsed.verseStart}`) : tooltipState.ref;
         const isDark = theme === 'dark';
         if (!csvLoaded) {
@@ -522,8 +519,7 @@
         const start = parseInt(parsed.verseStart, 10), end = parsed.verseEnd ? parseInt(parsed.verseEnd, 10) : start;
         let html = `<div class="divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}">`;
         for (let v = start; v <= Math.min(end, start + 50); v++) {
-            const key = `${parsed.bookId}-${parsed.chapter}-${v}`;
-            const text = bibleData[key] || "Verse not found.";
+            const key = `${parsed.bookId}-${parsed.chapter}-${v}`, text = bibleData[key] || "Verse not found.";
             html += `<div class="p-4 ${isDark ? 'bg-slate-900' : 'bg-white'}">${end > start ? `<span class="text-sm font-bold block uppercase tracking-tight mb-2 text-indigo-500 opacity-80">${bookName} ${parsed.chapter}:${v}</span>` : ''}<p class="cursor-text text-[17px] leading-relaxed font-serif select-text ${isDark ? 'text-white' : 'text-slate-800'}">${highlightExistingQuotes(text)}</p></div>`;
         }
         html += '</div>';
@@ -534,9 +530,14 @@
         if (!tooltipState.currentLineText) return verseText;
         const matches = [...tooltipState.currentLineText.matchAll(/["“”]([^"“”]+)["“”]/g)].map(m => m[1]);
         if (!matches.length) return verseText;
+        
         let result = verseText;
+        const cleanVerse = verseText.trim().toLowerCase();
+        
         [...new Set(matches)].sort((a,b) => b.length - a.length).forEach(q => {
-            if (!q.trim()) return;
+            const cleanQ = q.trim().toLowerCase();
+            if (!cleanQ || cleanQ === cleanVerse) return;
+            
             const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'g');
             result = result.replace(regex, `<span class="${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}">$1</span>`);
         });
@@ -552,17 +553,15 @@
         try {
             document.execCommand('copy');
             updateIcon(btn, 'check', 'text-emerald-500');
-            setTimeout(() => updateIcon(btn, 'copy'), 2000);
+            setTimeout(() => updateIcon(btn, btn.id === 'copyVerseBtn' ? 'copy' : 'copy'), 2000);
         } catch (err) {}
         document.body.removeChild(textArea);
     }
 
-    function handleCopyVerse() {
+    function handleCopyVerse(e) {
+        if (e) { e.stopPropagation(); e.preventDefault(); }
         const sel = window.getSelection().toString();
-        if (sel) { 
-            handleCopy(sel, copyVerseBtn); 
-            return; 
-        }
+        if (sel) { handleCopy(sel, copyVerseBtn); return; }
         const parsed = parseVerseRef(tooltipState.ref);
         if (!parsed || !csvLoaded) return;
         let text = "";
@@ -574,7 +573,8 @@
         handleCopy(text.trim(), copyVerseBtn);
     }
 
-    function handleQuote() {
+    function handleQuote(e) {
+        if (e) { e.stopPropagation(); e.preventDefault(); }
         if (!csvLoaded) return;
         const parsed = parseVerseRef(tooltipState.ref);
         let quote = window.getSelection().toString();
@@ -584,30 +584,19 @@
         }
         let space = (tooltipState.lineEndIndex > 0 && ![" ", "\n"].includes(content[tooltipState.lineEndIndex - 1])) ? " " : "";
         const formatted = `${space}"${quote.trim()}"`;
-        
-        const before = content.slice(0, tooltipState.lineEndIndex);
-        const after = content.slice(tooltipState.lineEndIndex);
-        content = before + formatted + after;
-        
+        content = content.slice(0, tooltipState.lineEndIndex) + formatted + content.slice(tooltipState.lineEndIndex);
         localStorage.setItem('bibleJournalContent', content);
         editor.value = content;
         
         const prevNewline = content.lastIndexOf('\n', tooltipState.lineEndIndex - 1);
         const nextNewline = content.indexOf('\n', tooltipState.lineEndIndex + formatted.length);
-        const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
-        const lineEnd = nextNewline === -1 ? content.length : nextNewline;
-        
+        const lineStart = prevNewline === -1 ? 0 : prevNewline + 1, lineEnd = nextNewline === -1 ? content.length : nextNewline;
         tooltipState.lineEndIndex = lineEnd;
         tooltipState.currentLineText = content.substring(lineStart, lineEnd);
-        
-        renderBackdrop(); 
-        renderExpandedContent();
-        
-        updateIcon(quoteBtn, 'check', 'text-emerald-500');
-        setTimeout(() => updateIcon(quoteBtn, 'message-square-quote'), 2000);
+        renderBackdrop(); renderExpandedContent();
+        // Removed quoteBtn success icon feedback
     }
 
-    // Drag and Resize
     function startDrag(e) { if (e.target.closest('button')) return; isDragging = true; const cx = e.clientX || (e.touches ? e.touches[0].clientX : 0), cy = e.clientY || (e.touches ? e.touches[0].clientY : 0); interactionOffset.x = cx - tooltipState.x; interactionOffset.y = cy - tooltipState.y; }
     function startResize(e) { e.stopPropagation(); isResizing = true; const cx = e.clientX || (e.touches ? e.touches[0].clientX : 0), cy = e.clientY || (e.touches ? e.touches[0].clientY : 0); interactionOffset.x = cx; interactionOffset.y = cy; interactionOffset.w = tooltipState.width; interactionOffset.h = tooltipState.height; }
     function onMouseMove(e) {
