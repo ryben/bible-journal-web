@@ -70,6 +70,8 @@
             padding: 0;
             margin: 0;
             display: inline;
+            cursor: pointer;
+            pointer-events: auto;
         }
 
         .theme-dark .verse-highlight {
@@ -82,12 +84,11 @@
             box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.2);
         }
 
-        /* Fully Opaque Tooltip Styles */
         .bible-tooltip {
             z-index: 9999 !important;
             pointer-events: auto !important;
             opacity: 1 !important;
-            transition: transform 0.1s ease-out;
+            transition: transform 0.1s ease-out, opacity 0.2s ease;
             cursor: default;
         }
 
@@ -130,13 +131,13 @@
                 <button id="themeToggle" class="p-1.5 rounded-lg border transition-all active:scale-95 shadow-sm bg-slate-900 border-slate-800 text-yellow-400 hover:border-yellow-400/50">
                     <i data-lucide="sun" class="w-[18px] h-[18px]"></i>
                 </button>
-                <input type="file" id="fileInput" accept=".csv" class="hidden" />
+                <input type="file" id="fileInput" accept=".csv,.txt" class="hidden" />
                 <button id="uploadBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm bg-slate-900 text-white border-slate-800 hover:border-indigo-500">
                     <i data-lucide="upload" id="uploadIcon" class="w-3.5 h-3.5"></i>
                     <span class="hidden sm:inline" id="uploadText">Upload CSV</span>
                 </button>
                 <button id="copyNotesBtn" class="p-1.5 rounded-lg border shadow-sm transition-all active:scale-95 bg-slate-900 text-white border-slate-800 hover:border-indigo-500">
-                    <i data-lucide="copy" id="copyNotesIcon" class="w-[18px] h-[18px]"></i>
+                    <i data-lucide="copy" class="w-[18px] h-[18px]"></i>
                 </button>
             </div>
         </header>
@@ -146,11 +147,11 @@
         <!-- Editor -->
         <div class="editor-container h-[calc(100vh-120px)]">
             <div id="backdrop" aria-hidden="true" class="editor-shared backdrop custom-scrollbar"></div>
-            <textarea id="editor" class="editor-shared custom-scrollbar" spellcheck="false"></textarea>
+            <textarea id="editor" class="editor-shared custom-scrollbar" spellcheck="false" placeholder="Start typing your study notes here... Mention a verse like Juan 1:1 to see it."></textarea>
         </div>
     </div>
 
-    <!-- Tooltip (Fully opaque and interaction-fixed) -->
+    <!-- Tooltip -->
     <div id="tooltip" class="bible-tooltip hidden fixed rounded-xl shadow-2xl overflow-hidden border">
         <!-- Compact Mode -->
         <div id="tooltipCompact" class="flex items-center gap-3 py-2.5 pl-4 pr-2">
@@ -167,11 +168,11 @@
                     <span id="expandedRef" class="text-lg font-black text-indigo-500 uppercase tracking-tight"></span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button id="quoteBtn" class="p-2 rounded-lg transition-all active:scale-90">
+                    <button id="quoteBtn" title="Insert quote to notes" class="p-2 rounded-lg transition-all active:scale-90">
                         <i data-lucide="message-square-quote" class="w-5 h-5"></i>
                     </button>
-                    <button id="copyBtn" class="p-2 rounded-lg transition-all active:scale-90">
-                        <i data-lucide="copy" id="copyIcon" class="w-5 h-5"></i>
+                    <button id="copyVerseBtn" title="Copy selection or verse" class="p-2 rounded-lg transition-all active:scale-90">
+                        <i data-lucide="copy" class="w-5 h-5"></i>
                     </button>
                     <button id="closeBtn" class="transition-colors p-2 rounded-lg">
                         <i data-lucide="x" class="w-[22px] h-[22px]"></i>
@@ -189,23 +190,22 @@
 </div>
 
 <script>
+    // Bible Book Mapping
     const BOOK_MAP = {
-        'genesis': 1, 'exodo': 2, 'exodus': 2, 'levitico': 3, 'leviticus': 3, 'bilang': 4, 'numbers': 4, 'deuteronomio': 5, 'deuteronomy': 5,
-        'josue': 6, 'joshua': 6, 'hukom': 7, 'judges': 7, 'ruth': 8, 'isamuel': 9, '1samuel': 9, 'iisamuel': 10, '2samuel': 10,
-        'ihari': 11, '1hari': 11, '1kings': 11, 'iihari': 12, '2hari': 12, '2kings': 12, 'icronica': 13, '1cronica': 13, '1chronicles': 13, 'iicronica': 14, '2cronica': 14, '2chronicles': 14,
-        'ezra': 15, 'nehemias': 16, 'nehemiah': 16, 'esther': 17, 'job': 18, 'awit': 19, 'psalms': 19, 'kawikaan': 20, 'proverbs': 20,
-        'eclesiastes': 21, 'ecclesiastes': 21, 'awitngmgaawit': 22, 'songofsongs': 22, 'isaias': 23, 'isaiah': 23, 'jeremias': 24, 'jeremiah': 24,
-        'panaghoy': 25, 'lamentations': 25, 'ezekiel': 26, 'daniel': 27, 'oseas': 28, 'hosea': 28, 'joel': 29, 'amos': 30, 'obadias': 31, 'obadiah': 31,
-        'jonas': 32, 'jonah': 32, 'mikas': 33, 'micah': 33, 'nahum': 34, 'habacuc': 35, 'habakkuk': 35, 'zefanias': 36, 'zephaniah': 36,
-        'hagai': 37, 'haggai': 37, 'zacarias': 38, 'zechariah': 38, 'malakias': 39, 'malachi': 39, 'mateo': 40, 'matthew': 40, 'marcos': 41, 'mark': 41, 'lucas': 42, 'luke': 42,
-        'juan': 43, 'john': 43, 'jn': 43, 'gawa': 44, 'acts': 44, 'roma': 45, 'romans': 45, 'icorinto': 46, '1corinto': 46, '1corinthians': 46, 'iicorinto': 47, '2corinto': 47, '2corinthians': 47,
-        'galacia': 48, 'galatians': 48, 'efeso': 49, 'ephesians': 49, 'filipos': 50, 'philippians': 50, 'colosas': 51, 'colossians': 51, 'itesalonica': 52, '1tesalonica': 52, '1thessalonians': 52,
-        'iitesalonica': 53, '2tesalonica': 53, '2thessalonians': 53, 'itimoteo': 54, '1timoteo': 54, '1timothy': 54, 'iitimoteo': 55, '2timoteo': 55, '2timothy': 55, 'tito': 56, 'titus': 56, 'filemon': 57, 'philemon': 57,
-        'hebreo': 58, 'hebrews': 58, 'santiago': 59, 'james': 59, 'ipedro': 60, '1pedro': 60, '1peter': 60, 'iipedro': 61, '2pedro': 61, '2peter': 61,
-        'ijuan': 62, '1juan': 62, '1john': 62, 'iijuan': 63, '2juan': 63, '2john': 63, 'iiijuan': 64, '3juan': 64, '3john': 64, 'judas': 65, 'jude': 65, 'apocalipsis': 66, 'revelation': 66
+        'genesis': 1, 'gen': 1, 'exodo': 2, 'exodus': 2, 'exo': 2, 'levitico': 3, 'leviticus': 3, 'lev': 3, 'bilang': 4, 'numbers': 4, 'num': 4, 'deuteronomio': 5, 'deuteronomy': 5, 'deut': 5,
+        'josue': 6, 'joshua': 6, 'jos': 6, 'hukom': 7, 'judges': 7, 'jdg': 7, 'ruth': 8, 'rut': 8, 'isamuel': 9, '1samuel': 9, '1sam': 9, 'iisamuel': 10, '2samuel': 10, '2sam': 10,
+        'ihari': 11, '1hari': 11, '1kings': 11, '1kgs': 11, 'iihari': 12, '2hari': 12, '2kings': 12, '2kgs': 12, 'icronica': 13, '1cronica': 13, '1chronicles': 13, '1chr': 13, 'iicronica': 14, '2cronica': 14, '2chronicles': 14, '2chr': 14,
+        'ezra': 15, 'ezr': 15, 'nehemias': 16, 'nehemiah': 16, 'neh': 16, 'esther': 17, 'est': 17, 'job': 18, 'awit': 19, 'psalms': 19, 'psa': 19, 'kawikaan': 20, 'proverbs': 20, 'pro': 20, 'prv': 20,
+        'eclesiastes': 21, 'ecclesiastes': 21, 'ecc': 21, 'awitngmgaawit': 22, 'songofsongs': 22, 'sos': 22, 'isaias': 23, 'isaiah': 23, 'isa': 23, 'jeremias': 24, 'jeremiah': 24, 'jer': 24,
+        'panaghoy': 25, 'lamentations': 25, 'lam': 25, 'ezekiel': 26, 'eze': 26, 'daniel': 27, 'dan': 27, 'oseas': 28, 'hosea': 28, 'hos': 28, 'joel': 29, 'joe': 29, 'amos': 30, 'amo': 30, 'obadias': 31, 'obadiah': 31, 'oba': 31,
+        'jonas': 32, 'jonah': 32, 'jon': 32, 'mikas': 33, 'micah': 33, 'mic': 33, 'nahum': 34, 'nah': 34, 'habacuc': 35, 'habakkuk': 35, 'hab': 35, 'zefanias': 36, 'zephaniah': 36, 'zep': 36,
+        'hagai': 37, 'haggai': 37, 'hag': 37, 'zacarias': 38, 'zechariah': 38, 'zec': 38, 'malakias': 39, 'malachi': 39, 'mal': 39, 'mateo': 40, 'matthew': 40, 'mat': 40, 'marcos': 41, 'mark': 41, 'mrk': 41, 'lucas': 42, 'luke': 42, 'luk': 42,
+        'juan': 43, 'john': 43, 'jn': 43, 'jhn': 43, 'gawa': 44, 'acts': 44, 'act': 44, 'roma': 45, 'romans': 45, 'rom': 45, 'icorinto': 46, '1corinto': 46, '1corinthians': 46, '1cor': 46, 'iicorinto': 47, '2corinto': 47, '2corinthians': 47, '2cor': 47,
+        'galacia': 48, 'galatians': 48, 'gal': 48, 'efeso': 49, 'ephesians': 49, 'eph': 49, 'filipos': 50, 'philippians': 50, 'phi': 50, 'php': 50, 'fili': 50, 'colosas': 51, 'colossians': 51, 'col': 51, 'itesalonica': 52, '1tesalonica': 52, '1thessalonians': 52, '1the': 52, '1thes': 52,
+        'iitesalonica': 53, '2tesalonica': 53, '2thessalonians': 53, '2the': 53, '2thes': 53, 'itimoteo': 54, '1timoteo': 54, '1timothy': 54, '1tim': 54, 'iitimoteo': 55, '2timoteo': 55, '2timothy': 55, '2tim': 55, 'tito': 56, 'titus': 56, 'tit': 56, 'filemon': 57, 'philemon': 57, 'phm': 57,
+        'hebreo': 58, 'hebrews': 58, 'heb': 58, 'santiago': 59, 'james': 59, 'jam': 59, 'jas': 59, 'ipedro': 60, '1pedro': 60, '1peter': 60, '1pet': 60, 'iipedro': 61, '2pedro': 61, '2peter': 61, '2pet': 61,
+        'ijuan': 62, '1juan': 62, '1john': 62, '1jn': 62, 'iijuan': 63, '2juan': 63, '2john': 63, '2jn': 63, 'iiijuan': 64, '3juan': 64, '3john': 64, '3jn': 64, 'judas': 65, 'jude': 65, 'jud': 65, 'apocalipsis': 66, 'revelation': 66, 'rev': 66
     };
-
-    const TAGALOG_PRIORITY_KEYS = Object.keys(BOOK_MAP).filter(k => !['exodus', 'leviticus', 'numbers', 'deuteronomy', 'joshua', 'judges', '1kings', '2kings', '1chronicles', '2chronicles', 'nehemiah', 'psalms', 'proverbs', 'ecclesiastes', 'songofsongs', 'isaiah', 'jeremiah', 'lamentations', 'hosea', 'obadiah', 'jonah', 'micah', 'habakkuk', 'zephaniah', 'haggai', 'zechariah', 'malachi', 'matthew', 'mark', 'luke', 'john', 'acts', 'romans', '1corinthians', '2corinthians', 'galatians', 'ephesians', 'philippians', 'colossians', '1thessalonians', '2thessalonians', '1timothy', '2timothy', 'titus', 'philemon', 'hebrews', 'james', '1peter', '2peter', '1john', '2john', '3john', 'jude', 'revelation'].includes(k));
 
     const DISPLAY_NAMES = {
         1: 'GENESIS', 2: 'EXODO', 3: 'LEVITICO', 4: 'BILANG', 5: 'DEUTERONOMIO', 6: 'JOSUE', 7: 'HUKOM', 8: 'RUTH',
@@ -222,7 +222,7 @@
     const VERSE_REGEX = /\b(?:(?:[1-3]|I{1,3})\s?)?[A-Za-z]{2,}\.?\s?\d{1,3}[:.]\d{1,3}(?:-\d{1,3})?\b/g;
 
     let theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    let content = "Juan 3:16 sapagka't gayon na lamang ang pagsinta ng Dios sa sanglibutan...\nBil 1.1 At ang Panginoon ay nagsalita kay Moises...\nFili 1.1 Kay Pablo at kay Timoteo...\nApoc 1:1 Ang pahayag ni Jesucristo...";
+    let content = "Juan 1:1 \"Nang pasimula siya ang Verbo\"";
     let bibleData = {};
     let csvLoaded = false;
     let tooltipState = { visible: false, expanded: false, x: 0, y: 0, width: 368, height: 280, ref: '', matchIndex: -1, lineEndIndex: -1, currentLineText: '' };
@@ -230,6 +230,7 @@
     let isDragging = false, isResizing = false;
     let interactionOffset = { x: 0, y: 0, w: 0, h: 0 };
 
+    // DOM Elements
     const editor = document.getElementById('editor');
     const backdrop = document.getElementById('backdrop');
     const themeToggle = document.getElementById('themeToggle');
@@ -247,43 +248,43 @@
     const expandedRef = document.getElementById('expandedRef');
     const expandedContent = document.getElementById('expandedContent');
     const quoteBtn = document.getElementById('quoteBtn');
-    const copyBtn = document.getElementById('copyBtn');
+    const copyVerseBtn = document.getElementById('copyVerseBtn');
     const closeBtn = document.getElementById('closeBtn');
     const tooltipHeader = document.getElementById('tooltipHeader');
     const resizer = document.getElementById('resizer');
 
     function init() {
         lucide.createIcons();
-        
-        // Load saved content from localStorage
         const savedContent = localStorage.getItem('bibleJournalContent');
-        if (savedContent !== null) {
-            content = savedContent;
-        }
+        if (savedContent !== null) content = savedContent;
         editor.value = content;
         
         applyTheme();
         renderBackdrop();
         
+        // Listeners
         editor.addEventListener('input', e => { 
             content = e.target.value; 
-            localStorage.setItem('bibleJournalContent', content); // Save to localStorage
+            localStorage.setItem('bibleJournalContent', content);
             renderBackdrop(); 
         });
-        editor.addEventListener('scroll', () => { backdrop.scrollTop = editor.scrollTop; backdrop.scrollLeft = editor.scrollLeft; });
+        editor.addEventListener('scroll', () => { 
+            backdrop.scrollTop = editor.scrollTop; 
+            backdrop.scrollLeft = editor.scrollLeft; 
+        });
         editor.addEventListener('click', handleInteraction);
         editor.addEventListener('keyup', handleInteraction);
         
         themeToggle.addEventListener('click', toggleTheme);
         uploadBtn.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleFileUpload);
-        copyNotesBtn.addEventListener('click', handleCopyNotes);
+        copyNotesBtn.addEventListener('click', () => handleCopy(content, copyNotesBtn));
         
         expandBtn.addEventListener('click', expandVerse);
         compactRef.addEventListener('click', expandVerse);
         closeBtn.addEventListener('click', hideTooltip);
         quoteBtn.addEventListener('click', handleQuote);
-        copyBtn.addEventListener('click', handleCopyVerse);
+        copyVerseBtn.addEventListener('click', handleCopyVerse);
 
         tooltipHeader.addEventListener('mousedown', startDrag);
         tooltipHeader.addEventListener('touchstart', startDrag, { passive: false });
@@ -297,6 +298,19 @@
         window.addEventListener('resize', () => { if(tooltipState.visible) hideTooltip(); });
     }
 
+    // Surgical Icon Update
+    function updateIcon(buttonEl, iconName, colorClass = '') {
+        const iconEl = buttonEl.querySelector('[data-lucide]');
+        if (!iconEl) return;
+        iconEl.setAttribute('data-lucide', iconName);
+        iconEl.className = `w-full h-full transition-colors ${colorClass}`;
+        iconEl.innerHTML = ''; // Clear existing SVG
+        lucide.createIcons({
+            attrs: { class: 'lucide-icon' },
+            nameAttr: 'data-lucide'
+        });
+    }
+
     function toggleTheme() {
         theme = theme === 'dark' ? 'light' : 'dark';
         localStorage.setItem('theme', theme);
@@ -306,27 +320,23 @@
     function applyTheme() {
         const isDark = theme === 'dark';
         document.body.className = isDark ? 'theme-dark bg-black text-white' : 'theme-light bg-white text-slate-900';
-        
         themeToggle.className = `p-1.5 rounded-lg border transition-all active:scale-95 shadow-sm ${isDark ? 'bg-slate-900 border-slate-800 text-yellow-400' : 'bg-white border-slate-200 text-slate-700'}`;
         themeToggle.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-[18px] h-[18px]"></i>`;
-        
         divider.className = `h-px w-full mb-2 flex-shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`;
         
         const btnClass = isDark ? 'bg-slate-900 text-white border-slate-800 hover:border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-500';
         if (!csvLoaded) uploadBtn.className = `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${btnClass}`;
         copyNotesBtn.className = `p-1.5 rounded-lg border shadow-sm transition-all active:scale-95 ${btnClass}`;
         
-        // Solid backgrounds, forced opacity 1
         tooltip.className = `bible-tooltip fixed rounded-xl shadow-2xl overflow-hidden border ${tooltipState.visible ? '' : 'hidden'} ${isDark ? 'bg-slate-900 text-slate-100 border-slate-800' : 'bg-white text-slate-900 border-slate-200'}`;
         tooltipHeader.className = `px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing border-b select-none flex-shrink-0 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`;
         expandedContent.className = `expanded-content-area flex-grow overflow-y-auto custom-scrollbar ${isDark ? 'bg-slate-950' : 'bg-white'}`;
-
-        // Tooltip action buttons fix
+        
         const tooltipActionBtnClass = isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-200';
         quoteBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
-        copyBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
+        copyVerseBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
         closeBtn.className = `transition-colors p-2 rounded-lg ${isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'}`;
-
+        
         lucide.createIcons();
         renderBackdrop();
         if (tooltipState.visible && tooltipState.expanded) renderExpandedContent();
@@ -337,20 +347,28 @@
     }
 
     function resolveBookId(input) {
-        const cleanInput = input.toLowerCase().replace(/\s/g, '');
+        if (!input) return "";
+        const cleanInput = input.toString().toLowerCase().trim().replace(/[\s\.]/g, '');
+        if (/^\d+$/.test(cleanInput)) {
+            const num = parseInt(cleanInput, 10);
+            if (num >= 1 && num <= 66) return num;
+        }
         if (BOOK_MAP[cleanInput]) return BOOK_MAP[cleanInput];
-        const tMatch = TAGALOG_PRIORITY_KEYS.find(k => k.startsWith(cleanInput));
-        if (tMatch) return BOOK_MAP[tMatch];
         const allKeys = Object.keys(BOOK_MAP);
-        const aMatch = allKeys.find(k => k.startsWith(cleanInput));
-        if (aMatch) return BOOK_MAP[aMatch];
+        const match = allKeys.find(k => k.replace(/[\s\.]/g, '').startsWith(cleanInput));
+        if (match) return BOOK_MAP[match];
         return cleanInput;
     }
 
     function parseVerseRef(ref) {
         const match = ref.match(/^((?:(?:[1-3]|I{1,3})\s?)?[A-Za-z]+)\.?\s?(\d+)[:.](\d+)(?:-(\d+))?$/i);
         if (!match) return null;
-        return { bookId: resolveBookId(match[1]), chapter: match[2], verseStart: match[3], verseEnd: match[4] };
+        return { 
+            bookId: resolveBookId(match[1]), 
+            chapter: parseInt(match[2], 10).toString(), 
+            verseStart: parseInt(match[3], 10).toString(), 
+            verseEnd: match[4] ? parseInt(match[4], 10).toString() : null 
+        };
     }
 
     function renderBackdrop() {
@@ -375,16 +393,25 @@
         reader.onload = (event) => {
             const text = event.target.result;
             const rows = text.split(/\r?\n/);
+            if (rows.length < 1) return;
+            let delimiter = rows[0].includes('\t') ? '\t' : (rows[0].includes(';') ? ';' : ',');
             const newBibleData = {};
             let count = 0;
-            for (let i = 1; i < rows.length; i++) {
-                if (!rows[i].trim()) continue;
-                const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                if (cols.length >= 4) {
-                    const book = cols[0].trim().replace(/"/g, '');
-                    const chapter = cols[1].trim();
-                    const verseNo = cols[2].trim();
-                    const verseText = cols.slice(3).join(',').trim().replace(/^"|"$/g, '');
+            for (let i = 0; i < rows.length; i++) {
+                const line = rows[i].trim();
+                if (!line) continue;
+                const firstD = line.indexOf(delimiter);
+                const secondD = line.indexOf(delimiter, firstD + 1);
+                const thirdD = line.indexOf(delimiter, secondD + 1);
+                if (firstD === -1 || secondD === -1 || thirdD === -1) continue;
+                const book = line.substring(0, firstD).replace(/^"|"$/g, '').trim();
+                const chapterRaw = line.substring(firstD + 1, secondD).replace(/^"|"$/g, '').trim();
+                const verseNoRaw = line.substring(secondD + 1, thirdD).replace(/^"|"$/g, '').trim();
+                const verseText = line.substring(thirdD + 1).replace(/^"|"$/g, '').trim();
+                if (i === 0 && (book.toLowerCase().includes("book") || chapterRaw.toLowerCase().includes("chap"))) continue;
+                const chapter = parseInt(chapterRaw, 10).toString();
+                const verseNo = parseInt(verseNoRaw, 10).toString();
+                if (!isNaN(chapter) && !isNaN(verseNo)) {
                     const bookId = resolveBookId(book);
                     newBibleData[`${bookId}-${chapter}-${verseNo}`] = verseText;
                     count++;
@@ -393,10 +420,7 @@
             bibleData = newBibleData;
             csvLoaded = true;
             updateCSVStatus(count);
-            // AUTO REFRESH verse if tooltip is open
-            if (tooltipState.visible && tooltipState.expanded) {
-                renderExpandedContent();
-            }
+            if (tooltipState.visible && tooltipState.expanded) renderExpandedContent();
         };
         reader.readAsText(file);
     }
@@ -411,15 +435,12 @@
 
     function handleInteraction(e) {
         if (e.target.closest('#tooltip')) return;
-        
         const pos = editor.selectionStart;
         const text = editor.value;
         VERSE_REGEX.lastIndex = 0;
-        let match, foundMatch = null, matchIdx = 0, currentMatchIdx = -1;
-        let lineEnd = -1, lineText = '';
-
+        let match, foundMatch = null, matchIdx = 0, currentMatchIdx = -1, lineEnd = -1, lineText = '';
         while ((match = VERSE_REGEX.exec(text)) !== null) {
-            if (pos >= match.index && pos <= match.index + match[0].length + 1) {
+            if (pos >= match.index && pos <= match.index + match[0].length) {
                 foundMatch = match[0];
                 currentMatchIdx = matchIdx;
                 const prevNewline = text.lastIndexOf('\n', match.index);
@@ -431,7 +452,6 @@
             }
             matchIdx++;
         }
-
         if (foundMatch) {
             tooltipState.ref = foundMatch;
             tooltipState.matchIndex = currentMatchIdx;
@@ -439,7 +459,6 @@
             tooltipState.currentLineText = lineText;
             tooltipState.visible = true;
             tooltipState.expanded = false;
-
             const spans = backdrop.querySelectorAll('.verse-highlight');
             const target = spans[currentMatchIdx];
             let spawnX = window.innerWidth / 2 - 90, spawnY = window.innerHeight / 2;
@@ -448,7 +467,6 @@
                 spawnX = rect.left + (rect.width / 2) - 90;
                 spawnY = rect.top - 52;
             }
-            
             tooltipState.x = Math.max(10, Math.min(spawnX, window.innerWidth - 190));
             tooltipState.y = Math.max(10, spawnY);
             showTooltip();
@@ -463,7 +481,6 @@
         tooltip.style.width = tooltipState.expanded ? tooltipState.width + 'px' : 'auto';
         tooltip.style.height = tooltipState.expanded ? tooltipState.height + 'px' : 'auto';
         tooltip.classList.remove('hidden');
-        
         if (!tooltipState.expanded) {
             tooltipCompact.classList.remove('hidden');
             tooltipExpanded.classList.add('hidden');
@@ -477,10 +494,7 @@
         }
     }
 
-    function hideTooltip() {
-        tooltipState.visible = false;
-        tooltip.classList.add('hidden');
-    }
+    function hideTooltip() { tooltipState.visible = false; tooltip.classList.add('hidden'); }
 
     function expandVerse() {
         tooltipState.expanded = true;
@@ -500,32 +514,17 @@
         const parsed = parseVerseRef(tooltipState.ref);
         const bookName = parsed ? (DISPLAY_NAMES[parsed.bookId] || parsed.bookId) : "Unknown";
         expandedRef.innerText = parsed ? (parsed.verseEnd ? `${bookName} ${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}` : `${bookName} ${parsed.chapter}:${parsed.verseStart}`) : tooltipState.ref;
-        
         const isDark = theme === 'dark';
-
         if (!csvLoaded) {
-            expandedContent.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-6 text-center space-y-5">
-                    <div class="p-4 rounded-full border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}">
-                        <i data-lucide="upload" class="w-8 h-8 text-indigo-500 opacity-50"></i>
-                    </div>
-                    <p class="${isDark ? 'text-slate-400' : 'text-slate-500'} text-sm font-medium">CSV data required to view scripture.</p>
-                    <button onclick="document.getElementById('fileInput').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-xl">Upload Bible CSV</button>
-                </div>`;
-            lucide.createIcons();
-            return;
+            expandedContent.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-6 text-center space-y-5"><div class="p-4 rounded-full border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}"><i data-lucide="upload" class="w-8 h-8 text-indigo-500 opacity-50"></i></div><p class="${isDark ? 'text-slate-400' : 'text-slate-500'} text-sm font-medium">CSV data required.</p><button onclick="document.getElementById('fileInput').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-xl">Upload Bible CSV</button></div>`;
+            lucide.createIcons(); return;
         }
-
-        const start = parseInt(parsed.verseStart), end = parsed.verseEnd ? parseInt(parsed.verseEnd) : start;
+        const start = parseInt(parsed.verseStart, 10), end = parsed.verseEnd ? parseInt(parsed.verseEnd, 10) : start;
         let html = `<div class="divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}">`;
         for (let v = start; v <= Math.min(end, start + 50); v++) {
             const key = `${parsed.bookId}-${parsed.chapter}-${v}`;
             const text = bibleData[key] || "Verse not found.";
-            html += `
-                <div class="p-4 ${isDark ? 'bg-slate-900' : 'bg-white'}">
-                    ${end > start ? `<span class="text-sm font-bold block uppercase tracking-tight mb-2 text-indigo-500 opacity-80">${bookName} ${parsed.chapter}:${v}</span>` : ''}
-                    <p class="cursor-text text-[17px] leading-relaxed font-serif select-text ${isDark ? 'text-white' : 'text-slate-800'}">${highlightExistingQuotes(text)}</p>
-                </div>`;
+            html += `<div class="p-4 ${isDark ? 'bg-slate-900' : 'bg-white'}">${end > start ? `<span class="text-sm font-bold block uppercase tracking-tight mb-2 text-indigo-500 opacity-80">${bookName} ${parsed.chapter}:${v}</span>` : ''}<p class="cursor-text text-[17px] leading-relaxed font-serif select-text ${isDark ? 'text-white' : 'text-slate-800'}">${highlightExistingQuotes(text)}</p></div>`;
         }
         html += '</div>';
         expandedContent.innerHTML = html;
@@ -533,121 +532,91 @@
 
     function highlightExistingQuotes(verseText) {
         if (!tooltipState.currentLineText) return verseText;
-        const quoteRegex = /["“”]([^"“”]+)["“”]/g;
-        const matches = [...tooltipState.currentLineText.matchAll(quoteRegex)].map(m => m[1]);
+        const matches = [...tooltipState.currentLineText.matchAll(/["“”]([^"“”]+)["“”]/g)].map(m => m[1]);
         if (!matches.length) return verseText;
         let result = verseText;
-        const unique = [...new Set(matches.filter(q => q.trim() && q !== verseText && verseText.includes(q)))].sort((a,b) => b.length - a.length);
-        unique.forEach(q => {
+        [...new Set(matches)].sort((a,b) => b.length - a.length).forEach(q => {
+            if (!q.trim()) return;
             const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'g');
             result = result.replace(regex, `<span class="${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}">$1</span>`);
         });
         return result;
     }
 
-    function handleCopyNotes() { copyToClipboard(content, 'copyNotesIcon'); }
-    function handleCopyVerse() {
-        const sel = window.getSelection().toString();
-        if (sel) { copyToClipboard(sel, 'copyIcon'); return; }
-        const parsed = parseVerseRef(tooltipState.ref);
-        if (!parsed || !csvLoaded) return;
-        let text = "";
-        const start = parseInt(parsed.verseStart), end = parsed.verseEnd ? parseInt(parsed.verseEnd) : start;
-        for (let v = start; v <= end; v++) {
-            const key = `${parsed.bookId}-${parsed.chapter}-${v}`;
-            text += `${DISPLAY_NAMES[parsed.bookId]} ${parsed.chapter}:${v}\n${bibleData[key] || "Verse not found."}\n\n`;
-        }
-        copyToClipboard(text.trim(), 'copyIcon');
-    }
-
-    function copyToClipboard(text, iconId) {
+    function handleCopy(text, btn) {
+        if (!text) return;
         const textArea = document.createElement("textarea");
         textArea.value = text;
         document.body.appendChild(textArea);
         textArea.select();
         try {
             document.execCommand('copy');
-            const icon = document.getElementById(iconId);
-            const old = icon.getAttribute('data-lucide');
-            icon.setAttribute('data-lucide', 'check');
-            icon.classList.add('text-emerald-500');
-            lucide.createIcons();
-            setTimeout(() => {
-                icon.setAttribute('data-lucide', old);
-                icon.classList.remove('text-emerald-500');
-                lucide.createIcons();
-            }, 2000);
+            updateIcon(btn, 'check', 'text-emerald-500');
+            setTimeout(() => updateIcon(btn, 'copy'), 2000);
         } catch (err) {}
         document.body.removeChild(textArea);
     }
 
+    function handleCopyVerse() {
+        const sel = window.getSelection().toString();
+        if (sel) { 
+            handleCopy(sel, copyVerseBtn); 
+            return; 
+        }
+        const parsed = parseVerseRef(tooltipState.ref);
+        if (!parsed || !csvLoaded) return;
+        let text = "";
+        const start = parseInt(parsed.verseStart, 10), end = parsed.verseEnd ? parseInt(parsed.verseEnd, 10) : start;
+        for (let v = start; v <= end; v++) {
+            const vText = bibleData[`${parsed.bookId}-${parsed.chapter}-${v}`] || "";
+            text += `${DISPLAY_NAMES[parsed.bookId]} ${parsed.chapter}:${v}\n${vText}\n\n`;
+        }
+        handleCopy(text.trim(), copyVerseBtn);
+    }
+
     function handleQuote() {
         if (!csvLoaded) return;
-        const sel = window.getSelection().toString();
-        let quote = sel;
+        const parsed = parseVerseRef(tooltipState.ref);
+        let quote = window.getSelection().toString();
         if (!quote) {
-            const parsed = parseVerseRef(tooltipState.ref);
-            const start = parseInt(parsed.verseStart), end = parsed.verseEnd ? parseInt(parsed.verseEnd) : start;
-            for (let v = start; v <= end; v++) { quote += (bibleData[`${parsed.bookId}-${parsed.chapter}-${v}`] || "") + " "; }
+            const start = parseInt(parsed.verseStart, 10), end = parsed.verseEnd ? parseInt(parsed.verseEnd, 10) : start;
+            for (let v = start; v <= end; v++) quote += (bibleData[`${parsed.bookId}-${parsed.chapter}-${v}`] || "") + " ";
         }
-        let space = " ";
-        if (tooltipState.lineEndIndex > 0) {
-            const charBefore = content[tooltipState.lineEndIndex - 1];
-            if (charBefore === " " || charBefore === "\n") space = "";
-        } else if (tooltipState.lineEndIndex === 0) space = "";
+        let space = (tooltipState.lineEndIndex > 0 && ![" ", "\n"].includes(content[tooltipState.lineEndIndex - 1])) ? " " : "";
         const formatted = `${space}"${quote.trim()}"`;
-        content = content.slice(0, tooltipState.lineEndIndex) + formatted + content.slice(tooltipState.lineEndIndex);
         
-        localStorage.setItem('bibleJournalContent', content); // Save to localStorage
+        const before = content.slice(0, tooltipState.lineEndIndex);
+        const after = content.slice(tooltipState.lineEndIndex);
+        content = before + formatted + after;
         
+        localStorage.setItem('bibleJournalContent', content);
         editor.value = content;
-        const prevNewline = content.lastIndexOf('\n', tooltipState.lineEndIndex);
+        
+        const prevNewline = content.lastIndexOf('\n', tooltipState.lineEndIndex - 1);
         const nextNewline = content.indexOf('\n', tooltipState.lineEndIndex + formatted.length);
         const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
-        tooltipState.lineEndIndex = nextNewline === -1 ? content.length : nextNewline;
-        tooltipState.currentLineText = content.substring(lineStart, tooltipState.lineEndIndex);
-        renderBackdrop();
+        const lineEnd = nextNewline === -1 ? content.length : nextNewline;
+        
+        tooltipState.lineEndIndex = lineEnd;
+        tooltipState.currentLineText = content.substring(lineStart, lineEnd);
+        
+        renderBackdrop(); 
         renderExpandedContent();
+        
+        updateIcon(quoteBtn, 'check', 'text-emerald-500');
+        setTimeout(() => updateIcon(quoteBtn, 'message-square-quote'), 2000);
     }
 
-    function startDrag(e) {
-        if (e.target.closest('button')) return;
-        isDragging = true;
-        const cx = e.clientX || (e.touches && e.touches[0].clientX);
-        const cy = e.clientY || (e.touches && e.touches[0].clientY);
-        interactionOffset.x = cx - tooltipState.x;
-        interactionOffset.y = cy - tooltipState.y;
-    }
-
-    function startResize(e) {
-        e.stopPropagation();
-        isResizing = true;
-        const cx = e.clientX || (e.touches && e.touches[0].clientX);
-        const cy = e.clientY || (e.touches && e.touches[0].clientY);
-        interactionOffset.x = cx;
-        interactionOffset.y = cy;
-        interactionOffset.w = tooltipState.width;
-        interactionOffset.h = tooltipState.height;
-    }
-
+    // Drag and Resize
+    function startDrag(e) { if (e.target.closest('button')) return; isDragging = true; const cx = e.clientX || (e.touches ? e.touches[0].clientX : 0), cy = e.clientY || (e.touches ? e.touches[0].clientY : 0); interactionOffset.x = cx - tooltipState.x; interactionOffset.y = cy - tooltipState.y; }
+    function startResize(e) { e.stopPropagation(); isResizing = true; const cx = e.clientX || (e.touches ? e.touches[0].clientX : 0), cy = e.clientY || (e.touches ? e.touches[0].clientY : 0); interactionOffset.x = cx; interactionOffset.y = cy; interactionOffset.w = tooltipState.width; interactionOffset.h = tooltipState.height; }
     function onMouseMove(e) {
         if (!isDragging && !isResizing) return;
-        const cx = e.clientX || (e.touches && e.touches[0].clientX);
-        const cy = e.clientY || (e.touches && e.touches[0].clientY);
-        if (isDragging) {
-            tooltipState.x = cx - interactionOffset.x;
-            tooltipState.y = cy - interactionOffset.y;
-            tooltip.style.left = tooltipState.x + 'px';
-            tooltip.style.top = tooltipState.y + 'px';
-        } else if (isResizing) {
-            tooltipState.width = Math.max(240, interactionOffset.w + (cx - interactionOffset.x));
-            tooltipState.height = Math.max(180, interactionOffset.h + (cy - interactionOffset.y));
-            tooltip.style.width = tooltipState.width + 'px';
-            tooltip.style.height = tooltipState.height + 'px';
-        }
+        const cx = e.clientX || (e.touches ? e.touches[0].clientX : 0), cy = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+        if (isDragging) { tooltipState.x = cx - interactionOffset.x; tooltipState.y = cy - interactionOffset.y; tooltip.style.left = tooltipState.x + 'px'; tooltip.style.top = tooltipState.y + 'px'; }
+        else if (isResizing) { tooltipState.width = Math.max(240, interactionOffset.w + (cx - interactionOffset.x)); tooltipState.height = Math.max(180, interactionOffset.h + (cy - interactionOffset.y)); tooltip.style.width = tooltipState.width + 'px'; tooltip.style.height = tooltipState.height + 'px'; }
         if (e.cancelable) e.preventDefault();
     }
-
     function onMouseUp() { isDragging = false; isResizing = false; }
 
     init();
