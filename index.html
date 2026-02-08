@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bible Journal</title>
+    
+    <!-- PWA / Mobile Meta Tags -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bible Journal">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%234f46e5%22/><path d=%22M30 25h40v50H30z%22 fill=%22white%22/><path d=%22M30 35h40M30 45h40M30 55h40%22 stroke=%22%234f46e5%22 stroke-width=%225%22/></svg>">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -128,6 +136,12 @@
             </div>
 
             <div class="flex items-center gap-1.5">
+                <!-- PWA Install Button (Hidden by default) -->
+                <button id="installBtn" class="hidden flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-500">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Install App</span>
+                </button>
+
                 <button id="themeToggle" class="p-1.5 rounded-lg border transition-all active:scale-95 shadow-sm bg-slate-900 border-slate-800 text-yellow-400 hover:border-yellow-400/50">
                     <i data-lucide="sun" class="w-[18px] h-[18px]"></i>
                 </button>
@@ -189,6 +203,64 @@
 </div>
 
 <script>
+    // --- PWA / MANIFEST DYNAMIC GENERATION ---
+    const manifest = {
+        name: "Bible Journal",
+        short_name: "Journal",
+        start_url: ".",
+        display: "standalone",
+        background_color: "#000000",
+        theme_color: "#4f46e5",
+        icons: [
+            {
+                src: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22><rect width=%22512%22 height=%22512%22 rx=%22100%22 fill=%22%234f46e5%22/><path d=%22M128 128h256v256H128z%22 fill=%22white%22/></svg>",
+                sizes: "512x512",
+                type: "image/svg+xml",
+                purpose: "any maskable"
+            }
+        ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+    const manifestURL = URL.createObjectURL(manifestBlob);
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = manifestURL;
+    document.head.appendChild(link);
+
+    // --- SERVICE WORKER REGISTRATION (Injected) ---
+    if ('serviceWorker' in navigator) {
+        const swCode = `
+            const CACHE_NAME = 'bible-journal-v1';
+            self.addEventListener('install', (event) => {
+                event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(['/'])));
+            });
+            self.addEventListener('fetch', (event) => {
+                event.respondWith(caches.match(event.request).then((response) => response || fetch(event.request)));
+            });
+        `;
+        const swBlob = new Blob([swCode], { type: 'text/javascript' });
+        const swURL = URL.createObjectURL(swBlob);
+        navigator.serviceWorker.register(swURL).catch(() => { /* Silent fail in preview */ });
+    }
+
+    // Install prompt logic
+    let deferredPrompt;
+    const installBtn = document.getElementById('installBtn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.classList.remove('hidden');
+    });
+
+    installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') installBtn.classList.add('hidden');
+        deferredPrompt = null;
+    });
+
+    // --- BIBLE JOURNAL LOGIC ---
     const BOOK_MAP = {
         'genesis': 1, 'gen': 1, 'exodo': 2, 'exodus': 2, 'exo': 2, 'levitico': 3, 'leviticus': 3, 'lev': 3, 'bilang': 4, 'numbers': 4, 'num': 4, 'deuteronomio': 5, 'deuteronomy': 5, 'deut': 5,
         'josue': 6, 'joshua': 6, 'jos': 6, 'hukom': 7, 'judges': 7, 'jdg': 7, 'ruth': 8, 'rut': 8, 'isamuel': 9, '1samuel': 9, '1sam': 9, 'iisamuel': 10, '2samuel': 10, '2sam': 10,
@@ -294,7 +366,6 @@
         window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('touchend', onMouseUp);
         
-        // Prevent system context menu in expanded view for mobile
         expandedContent.oncontextmenu = (e) => {
             if (tooltipState.expanded) e.preventDefault();
         };
@@ -432,8 +503,6 @@
         let match, foundMatch = null, matchIdx = 0, currentMatchIdx = -1, lineEnd = -1, lineText = '';
         
         while ((match = VERSE_REGEX.exec(text)) !== null) {
-            // Updated range check to allow a 1-character grace period (like a space)
-            // after the verse reference match.
             if (pos >= match.index && pos <= match.index + match[0].length + 1) {
                 foundMatch = match[0];
                 currentMatchIdx = matchIdx;
@@ -447,8 +516,6 @@
         }
 
         if (foundMatch) {
-            // Behavior: clicking on any verse (even a new one while expanded)
-            // will reset the view to compact mode.
             tooltipState.ref = foundMatch;
             tooltipState.matchIndex = currentMatchIdx;
             tooltipState.lineEndIndex = lineEnd;
@@ -594,7 +661,6 @@
         tooltipState.lineEndIndex = lineEnd;
         tooltipState.currentLineText = content.substring(lineStart, lineEnd);
         renderBackdrop(); renderExpandedContent();
-        // Removed quoteBtn success icon feedback
     }
 
     function startDrag(e) { if (e.target.closest('button')) return; isDragging = true; const cx = e.clientX || (e.touches ? e.touches[0].clientX : 0), cy = e.clientY || (e.touches ? e.touches[0].clientY : 0); interactionOffset.x = cx - tooltipState.x; interactionOffset.y = cy - tooltipState.y; }
