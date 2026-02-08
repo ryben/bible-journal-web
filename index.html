@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Inter:wght@400;500;700;900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+
+        .editor-container {
+            position: relative;
+            flex-grow: 1;
+            min-height: 0;
+            width: 100%;
+            background: transparent;
+        }
+
+        .editor-shared {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 16px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            box-sizing: border-box;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            border: none;
+            outline: none;
+            display: block;
+            overflow-y: scroll;
+            overflow-x: hidden;
+            appearance: none;
+        }
+
+        textarea {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 2;
+            background: transparent !important;
+            color: inherit !important;
+            caret-color: #6366f1;
+            resize: none;
+        }
+
+        .backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            background: transparent;
+            pointer-events: none;
+            color: transparent;
+        }
+
+        .verse-highlight {
+            font-weight: bold;
+            border-radius: 4px;
+            padding: 0;
+            margin: 0;
+            display: inline;
+        }
+
+        .theme-dark .verse-highlight {
+            background-color: rgba(99, 102, 241, 0.45);
+            box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2);
+        }
+
+        .theme-light .verse-highlight {
+            background-color: rgba(14, 165, 233, 0.15);
+            box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.2);
+        }
+
+        /* Fully Opaque Tooltip Styles */
+        .bible-tooltip {
+            z-index: 9999 !important;
+            pointer-events: auto !important;
+            opacity: 1 !important;
+            transition: transform 0.1s ease-out;
+            cursor: default;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            border-radius: 10px;
+        }
+
+        .theme-dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; }
+        .theme-light .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .expanded-content-area {
+            user-select: text !important;
+        }
+
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body class="theme-dark bg-black text-white transition-colors duration-300">
+
+<div id="app" class="min-h-screen p-2 md:p-4 flex flex-col">
+    <div class="max-w-5xl mx-auto h-full flex flex-col w-full flex-grow">
+        <!-- Header -->
+        <header class="flex flex-row items-center justify-between px-1 pt-1 pb-4 flex-shrink-0">
+            <div class="flex items-center gap-2">
+                <div class="bg-indigo-600 p-1.5 rounded shadow-md">
+                    <i data-lucide="book-open" class="text-white w-5 h-5"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight">Bible Journal</h1>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <button id="themeToggle" class="p-1.5 rounded-lg border transition-all active:scale-95 shadow-sm bg-slate-900 border-slate-800 text-yellow-400 hover:border-yellow-400/50">
+                    <i data-lucide="sun" class="w-[18px] h-[18px]"></i>
+                </button>
+                <input type="file" id="fileInput" accept=".csv" class="hidden" />
+                <button id="uploadBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm bg-slate-900 text-white border-slate-800 hover:border-indigo-500">
+                    <i data-lucide="upload" id="uploadIcon" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline" id="uploadText">Upload CSV</span>
+                </button>
+                <button id="copyNotesBtn" class="p-1.5 rounded-lg border shadow-sm transition-all active:scale-95 bg-slate-900 text-white border-slate-800 hover:border-indigo-500">
+                    <i data-lucide="copy" id="copyNotesIcon" class="w-[18px] h-[18px]"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="h-px w-full mb-2 flex-shrink-0 bg-slate-800" id="divider"></div>
+
+        <!-- Editor -->
+        <div class="editor-container h-[calc(100vh-120px)]">
+            <div id="backdrop" aria-hidden="true" class="editor-shared backdrop custom-scrollbar"></div>
+            <textarea id="editor" class="editor-shared custom-scrollbar" spellcheck="false"></textarea>
+        </div>
+    </div>
+
+    <!-- Tooltip (Fully opaque and interaction-fixed) -->
+    <div id="tooltip" class="bible-tooltip hidden fixed rounded-xl shadow-2xl overflow-hidden border">
+        <!-- Compact Mode -->
+        <div id="tooltipCompact" class="flex items-center gap-3 py-2.5 pl-4 pr-2">
+            <button id="compactRef" class="text-sm font-bold text-indigo-500 uppercase tracking-widest hover:text-indigo-400 transition-colors"></button>
+            <button id="expandBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black py-1.5 px-3 rounded-md flex items-center gap-1 active:scale-95 transition-all">
+                <i data-lucide="search" class="w-3.5 h-3.5"></i> SHOW
+            </button>
+        </div>
+
+        <!-- Expanded Mode -->
+        <div id="tooltipExpanded" class="hidden flex flex-col h-full">
+            <div id="tooltipHeader" class="px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing border-b select-none flex-shrink-0">
+                <div class="flex items-center gap-2 pointer-events-none">
+                    <span id="expandedRef" class="text-lg font-black text-indigo-500 uppercase tracking-tight"></span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button id="quoteBtn" class="p-2 rounded-lg transition-all active:scale-90">
+                        <i data-lucide="message-square-quote" class="w-5 h-5"></i>
+                    </button>
+                    <button id="copyBtn" class="p-2 rounded-lg transition-all active:scale-90">
+                        <i data-lucide="copy" id="copyIcon" class="w-5 h-5"></i>
+                    </button>
+                    <button id="closeBtn" class="transition-colors p-2 rounded-lg">
+                        <i data-lucide="x" class="w-[22px] h-[22px]"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="expandedContent" class="expanded-content-area flex-grow overflow-y-auto custom-scrollbar">
+                <!-- Content injected here -->
+            </div>
+            <div id="resizer" class="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize flex items-end justify-end p-1 group">
+                <div class="w-2.5 h-2.5 rounded-full transition-colors shadow-sm bg-slate-700 group-hover:bg-indigo-500"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const BOOK_MAP = {
+        'genesis': 1, 'exodo': 2, 'exodus': 2, 'levitico': 3, 'leviticus': 3, 'bilang': 4, 'numbers': 4, 'deuteronomio': 5, 'deuteronomy': 5,
+        'josue': 6, 'joshua': 6, 'hukom': 7, 'judges': 7, 'ruth': 8, 'isamuel': 9, '1samuel': 9, 'iisamuel': 10, '2samuel': 10,
+        'ihari': 11, '1hari': 11, '1kings': 11, 'iihari': 12, '2hari': 12, '2kings': 12, 'icronica': 13, '1cronica': 13, '1chronicles': 13, 'iicronica': 14, '2cronica': 14, '2chronicles': 14,
+        'ezra': 15, 'nehemias': 16, 'nehemiah': 16, 'esther': 17, 'job': 18, 'awit': 19, 'psalms': 19, 'kawikaan': 20, 'proverbs': 20,
+        'eclesiastes': 21, 'ecclesiastes': 21, 'awitngmgaawit': 22, 'songofsongs': 22, 'isaias': 23, 'isaiah': 23, 'jeremias': 24, 'jeremiah': 24,
+        'panaghoy': 25, 'lamentations': 25, 'ezekiel': 26, 'daniel': 27, 'oseas': 28, 'hosea': 28, 'joel': 29, 'amos': 30, 'obadias': 31, 'obadiah': 31,
+        'jonas': 32, 'jonah': 32, 'mikas': 33, 'micah': 33, 'nahum': 34, 'habacuc': 35, 'habakkuk': 35, 'zefanias': 36, 'zephaniah': 36,
+        'hagai': 37, 'haggai': 37, 'zacarias': 38, 'zechariah': 38, 'malakias': 39, 'malachi': 39, 'mateo': 40, 'matthew': 40, 'marcos': 41, 'mark': 41, 'lucas': 42, 'luke': 42,
+        'juan': 43, 'john': 43, 'jn': 43, 'gawa': 44, 'acts': 44, 'roma': 45, 'romans': 45, 'icorinto': 46, '1corinto': 46, '1corinthians': 46, 'iicorinto': 47, '2corinto': 47, '2corinthians': 47,
+        'galacia': 48, 'galatians': 48, 'efeso': 49, 'ephesians': 49, 'filipos': 50, 'philippians': 50, 'colosas': 51, 'colossians': 51, 'itesalonica': 52, '1tesalonica': 52, '1thessalonians': 52,
+        'iitesalonica': 53, '2tesalonica': 53, '2thessalonians': 53, 'itimoteo': 54, '1timoteo': 54, '1timothy': 54, 'iitimoteo': 55, '2timoteo': 55, '2timothy': 55, 'tito': 56, 'titus': 56, 'filemon': 57, 'philemon': 57,
+        'hebreo': 58, 'hebrews': 58, 'santiago': 59, 'james': 59, 'ipedro': 60, '1pedro': 60, '1peter': 60, 'iipedro': 61, '2pedro': 61, '2peter': 61,
+        'ijuan': 62, '1juan': 62, '1john': 62, 'iijuan': 63, '2juan': 63, '2john': 63, 'iiijuan': 64, '3juan': 64, '3john': 64, 'judas': 65, 'jude': 65, 'apocalipsis': 66, 'revelation': 66
+    };
+
+    const TAGALOG_PRIORITY_KEYS = Object.keys(BOOK_MAP).filter(k => !['exodus', 'leviticus', 'numbers', 'deuteronomy', 'joshua', 'judges', '1kings', '2kings', '1chronicles', '2chronicles', 'nehemiah', 'psalms', 'proverbs', 'ecclesiastes', 'songofsongs', 'isaiah', 'jeremiah', 'lamentations', 'hosea', 'obadiah', 'jonah', 'micah', 'habakkuk', 'zephaniah', 'haggai', 'zechariah', 'malachi', 'matthew', 'mark', 'luke', 'john', 'acts', 'romans', '1corinthians', '2corinthians', 'galatians', 'ephesians', 'philippians', 'colossians', '1thessalonians', '2thessalonians', '1timothy', '2timothy', 'titus', 'philemon', 'hebrews', 'james', '1peter', '2peter', '1john', '2john', '3john', 'jude', 'revelation'].includes(k));
+
+    const DISPLAY_NAMES = {
+        1: 'GENESIS', 2: 'EXODO', 3: 'LEVITICO', 4: 'BILANG', 5: 'DEUTERONOMIO', 6: 'JOSUE', 7: 'HUKOM', 8: 'RUTH',
+        9: 'I SAMUEL', 10: 'II SAMUEL', 11: 'I HARI', 12: 'II HARI', 13: 'I CRONICA', 14: 'II CRONICA', 15: 'EZRA', 16: 'NEHEMIAS',
+        17: 'ESTHER', 18: 'JOB', 19: 'AWIT', 20: 'KAWIKAAN', 21: 'ECLESIASTES', 22: 'AWIT NG MGA AWIT',
+        23: 'ISAIAS', 24: 'JEREMIAS', 25: 'PANAGHOY', 26: 'EZEKIEL', 27: 'DANIEL', 28: 'OSEAS', 29: 'JOEL', 30: 'AMOS',
+        31: 'OBADIAS', 32: 'JONAS', 33: 'MIKAS', 34: 'NAHUM', 35: 'HABACUC', 36: 'ZEFANIAS', 37: 'HAGAI', 38: 'ZACARIAS', 39: 'MALAKIAS',
+        40: 'MATEO', 41: 'MARCOS', 42: 'LUCAS', 43: 'JUAN', 44: 'GAWA', 45: 'ROMA', 46: 'I CORINTO', 47: 'II CORINTO',
+        48: 'GALACIA', 49: 'EFESO', 50: 'FILIPOS', 51: 'COLOSAS', 52: 'I TESALONICA', 53: 'II TESALONICA', 54: 'I TIMOTEO',
+        55: 'II TIMOTEO', 56: 'TITO', 57: 'FILEMON', 58: 'HEBREO', 59: 'SANTIAGO', 60: 'I PEDRO', 61: 'II PEDRO', 62: 'I JUAN',
+        63: 'II JUAN', 64: 'III JUAN', 65: 'JUDAS', 66: 'APOCALIPSIS'
+    };
+
+    const VERSE_REGEX = /\b(?:(?:[1-3]|I{1,3})\s?)?[A-Za-z]{2,}\.?\s?\d{1,3}[:.]\d{1,3}(?:-\d{1,3})?\b/g;
+
+    let theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    let content = "Juan 3:16 sapagka't gayon na lamang ang pagsinta ng Dios sa sanglibutan...\nBil 1.1 At ang Panginoon ay nagsalita kay Moises...\nFili 1.1 Kay Pablo at kay Timoteo...\nApoc 1:1 Ang pahayag ni Jesucristo...";
+    let bibleData = {};
+    let csvLoaded = false;
+    let tooltipState = { visible: false, expanded: false, x: 0, y: 0, width: 368, height: 280, ref: '', matchIndex: -1, lineEndIndex: -1, currentLineText: '' };
+    
+    let isDragging = false, isResizing = false;
+    let interactionOffset = { x: 0, y: 0, w: 0, h: 0 };
+
+    const editor = document.getElementById('editor');
+    const backdrop = document.getElementById('backdrop');
+    const themeToggle = document.getElementById('themeToggle');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('fileInput');
+    const uploadText = document.getElementById('uploadText');
+    const uploadIcon = document.getElementById('uploadIcon');
+    const copyNotesBtn = document.getElementById('copyNotesBtn');
+    const divider = document.getElementById('divider');
+    const tooltip = document.getElementById('tooltip');
+    const tooltipCompact = document.getElementById('tooltipCompact');
+    const tooltipExpanded = document.getElementById('tooltipExpanded');
+    const compactRef = document.getElementById('compactRef');
+    const expandBtn = document.getElementById('expandBtn');
+    const expandedRef = document.getElementById('expandedRef');
+    const expandedContent = document.getElementById('expandedContent');
+    const quoteBtn = document.getElementById('quoteBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const closeBtn = document.getElementById('closeBtn');
+    const tooltipHeader = document.getElementById('tooltipHeader');
+    const resizer = document.getElementById('resizer');
+
+    function init() {
+        lucide.createIcons();
+        
+        // Load saved content from localStorage
+        const savedContent = localStorage.getItem('bibleJournalContent');
+        if (savedContent !== null) {
+            content = savedContent;
+        }
+        editor.value = content;
+        
+        applyTheme();
+        renderBackdrop();
+        
+        editor.addEventListener('input', e => { 
+            content = e.target.value; 
+            localStorage.setItem('bibleJournalContent', content); // Save to localStorage
+            renderBackdrop(); 
+        });
+        editor.addEventListener('scroll', () => { backdrop.scrollTop = editor.scrollTop; backdrop.scrollLeft = editor.scrollLeft; });
+        editor.addEventListener('click', handleInteraction);
+        editor.addEventListener('keyup', handleInteraction);
+        
+        themeToggle.addEventListener('click', toggleTheme);
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileUpload);
+        copyNotesBtn.addEventListener('click', handleCopyNotes);
+        
+        expandBtn.addEventListener('click', expandVerse);
+        compactRef.addEventListener('click', expandVerse);
+        closeBtn.addEventListener('click', hideTooltip);
+        quoteBtn.addEventListener('click', handleQuote);
+        copyBtn.addEventListener('click', handleCopyVerse);
+
+        tooltipHeader.addEventListener('mousedown', startDrag);
+        tooltipHeader.addEventListener('touchstart', startDrag, { passive: false });
+        resizer.addEventListener('mousedown', startResize);
+        resizer.addEventListener('touchstart', startResize, { passive: false });
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('touchmove', onMouseMove, { passive: false });
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('touchend', onMouseUp);
+        window.addEventListener('resize', () => { if(tooltipState.visible) hideTooltip(); });
+    }
+
+    function toggleTheme() {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', theme);
+        applyTheme();
+    }
+
+    function applyTheme() {
+        const isDark = theme === 'dark';
+        document.body.className = isDark ? 'theme-dark bg-black text-white' : 'theme-light bg-white text-slate-900';
+        
+        themeToggle.className = `p-1.5 rounded-lg border transition-all active:scale-95 shadow-sm ${isDark ? 'bg-slate-900 border-slate-800 text-yellow-400' : 'bg-white border-slate-200 text-slate-700'}`;
+        themeToggle.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-[18px] h-[18px]"></i>`;
+        
+        divider.className = `h-px w-full mb-2 flex-shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`;
+        
+        const btnClass = isDark ? 'bg-slate-900 text-white border-slate-800 hover:border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-500';
+        if (!csvLoaded) uploadBtn.className = `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${btnClass}`;
+        copyNotesBtn.className = `p-1.5 rounded-lg border shadow-sm transition-all active:scale-95 ${btnClass}`;
+        
+        // Solid backgrounds, forced opacity 1
+        tooltip.className = `bible-tooltip fixed rounded-xl shadow-2xl overflow-hidden border ${tooltipState.visible ? '' : 'hidden'} ${isDark ? 'bg-slate-900 text-slate-100 border-slate-800' : 'bg-white text-slate-900 border-slate-200'}`;
+        tooltipHeader.className = `px-4 py-2 flex justify-between items-center cursor-grab active:cursor-grabbing border-b select-none flex-shrink-0 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`;
+        expandedContent.className = `expanded-content-area flex-grow overflow-y-auto custom-scrollbar ${isDark ? 'bg-slate-950' : 'bg-white'}`;
+
+        // Tooltip action buttons fix
+        const tooltipActionBtnClass = isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-200';
+        quoteBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
+        copyBtn.className = `p-2 rounded-lg transition-all active:scale-90 ${tooltipActionBtnClass}`;
+        closeBtn.className = `transition-colors p-2 rounded-lg ${isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'}`;
+
+        lucide.createIcons();
+        renderBackdrop();
+        if (tooltipState.visible && tooltipState.expanded) renderExpandedContent();
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
+    }
+
+    function resolveBookId(input) {
+        const cleanInput = input.toLowerCase().replace(/\s/g, '');
+        if (BOOK_MAP[cleanInput]) return BOOK_MAP[cleanInput];
+        const tMatch = TAGALOG_PRIORITY_KEYS.find(k => k.startsWith(cleanInput));
+        if (tMatch) return BOOK_MAP[tMatch];
+        const allKeys = Object.keys(BOOK_MAP);
+        const aMatch = allKeys.find(k => k.startsWith(cleanInput));
+        if (aMatch) return BOOK_MAP[aMatch];
+        return cleanInput;
+    }
+
+    function parseVerseRef(ref) {
+        const match = ref.match(/^((?:(?:[1-3]|I{1,3})\s?)?[A-Za-z]+)\.?\s?(\d+)[:.](\d+)(?:-(\d+))?$/i);
+        if (!match) return null;
+        return { bookId: resolveBookId(match[1]), chapter: match[2], verseStart: match[3], verseEnd: match[4] };
+    }
+
+    function renderBackdrop() {
+        VERSE_REGEX.lastIndex = 0;
+        let lastIndex = 0;
+        let html = '';
+        let match;
+        const text = content;
+        while ((match = VERSE_REGEX.exec(text)) !== null) {
+            html += escapeHTML(text.substring(lastIndex, match.index));
+            html += `<span class="verse-highlight">${escapeHTML(match[0])}</span>`;
+            lastIndex = VERSE_REGEX.lastIndex;
+        }
+        html += escapeHTML(text.substring(lastIndex));
+        backdrop.innerHTML = html + (text.endsWith('\n') ? ' ' : '');
+    }
+
+    function handleFileUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target.result;
+            const rows = text.split(/\r?\n/);
+            const newBibleData = {};
+            let count = 0;
+            for (let i = 1; i < rows.length; i++) {
+                if (!rows[i].trim()) continue;
+                const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                if (cols.length >= 4) {
+                    const book = cols[0].trim().replace(/"/g, '');
+                    const chapter = cols[1].trim();
+                    const verseNo = cols[2].trim();
+                    const verseText = cols.slice(3).join(',').trim().replace(/^"|"$/g, '');
+                    const bookId = resolveBookId(book);
+                    newBibleData[`${bookId}-${chapter}-${verseNo}`] = verseText;
+                    count++;
+                }
+            }
+            bibleData = newBibleData;
+            csvLoaded = true;
+            updateCSVStatus(count);
+            // AUTO REFRESH verse if tooltip is open
+            if (tooltipState.visible && tooltipState.expanded) {
+                renderExpandedContent();
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function updateCSVStatus(count) {
+        const isDark = theme === 'dark';
+        uploadBtn.className = `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${isDark ? 'bg-emerald-900 text-emerald-400 border-emerald-800' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`;
+        uploadIcon.setAttribute('data-lucide', 'check-circle-2');
+        uploadText.innerText = `${count} Verses`;
+        lucide.createIcons();
+    }
+
+    function handleInteraction(e) {
+        if (e.target.closest('#tooltip')) return;
+        
+        const pos = editor.selectionStart;
+        const text = editor.value;
+        VERSE_REGEX.lastIndex = 0;
+        let match, foundMatch = null, matchIdx = 0, currentMatchIdx = -1;
+        let lineEnd = -1, lineText = '';
+
+        while ((match = VERSE_REGEX.exec(text)) !== null) {
+            if (pos >= match.index && pos <= match.index + match[0].length + 1) {
+                foundMatch = match[0];
+                currentMatchIdx = matchIdx;
+                const prevNewline = text.lastIndexOf('\n', match.index);
+                const nextNewline = text.indexOf('\n', match.index);
+                const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
+                lineEnd = nextNewline === -1 ? text.length : nextNewline;
+                lineText = text.substring(lineStart, lineEnd);
+                break;
+            }
+            matchIdx++;
+        }
+
+        if (foundMatch) {
+            tooltipState.ref = foundMatch;
+            tooltipState.matchIndex = currentMatchIdx;
+            tooltipState.lineEndIndex = lineEnd;
+            tooltipState.currentLineText = lineText;
+            tooltipState.visible = true;
+            tooltipState.expanded = false;
+
+            const spans = backdrop.querySelectorAll('.verse-highlight');
+            const target = spans[currentMatchIdx];
+            let spawnX = window.innerWidth / 2 - 90, spawnY = window.innerHeight / 2;
+            if (target) {
+                const rect = target.getBoundingClientRect();
+                spawnX = rect.left + (rect.width / 2) - 90;
+                spawnY = rect.top - 52;
+            }
+            
+            tooltipState.x = Math.max(10, Math.min(spawnX, window.innerWidth - 190));
+            tooltipState.y = Math.max(10, spawnY);
+            showTooltip();
+        } else {
+            hideTooltip();
+        }
+    }
+
+    function showTooltip() {
+        tooltip.style.left = tooltipState.x + 'px';
+        tooltip.style.top = tooltipState.y + 'px';
+        tooltip.style.width = tooltipState.expanded ? tooltipState.width + 'px' : 'auto';
+        tooltip.style.height = tooltipState.expanded ? tooltipState.height + 'px' : 'auto';
+        tooltip.classList.remove('hidden');
+        
+        if (!tooltipState.expanded) {
+            tooltipCompact.classList.remove('hidden');
+            tooltipExpanded.classList.add('hidden');
+            const parsed = parseVerseRef(tooltipState.ref);
+            const book = parsed ? (DISPLAY_NAMES[parsed.bookId] || parsed.bookId) : tooltipState.ref;
+            compactRef.innerText = parsed ? (parsed.verseEnd ? `${book} ${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}` : `${book} ${parsed.chapter}:${parsed.verseStart}`) : tooltipState.ref;
+        } else {
+            tooltipCompact.classList.add('hidden');
+            tooltipExpanded.classList.remove('hidden');
+            renderExpandedContent();
+        }
+    }
+
+    function hideTooltip() {
+        tooltipState.visible = false;
+        tooltip.classList.add('hidden');
+    }
+
+    function expandVerse() {
+        tooltipState.expanded = true;
+        const spans = backdrop.querySelectorAll('.verse-highlight');
+        const target = spans[tooltipState.matchIndex];
+        if (target) {
+            const rect = target.getBoundingClientRect();
+            tooltipState.y = rect.bottom + 12;
+            tooltipState.x = rect.left + (rect.width / 2) - (tooltipState.width / 2);
+        }
+        tooltipState.x = Math.max(10, Math.min(tooltipState.x, window.innerWidth - tooltipState.width - 10));
+        if (tooltipState.y + tooltipState.height > window.innerHeight) tooltipState.y = window.innerHeight - tooltipState.height - 10;
+        showTooltip();
+    }
+
+    function renderExpandedContent() {
+        const parsed = parseVerseRef(tooltipState.ref);
+        const bookName = parsed ? (DISPLAY_NAMES[parsed.bookId] || parsed.bookId) : "Unknown";
+        expandedRef.innerText = parsed ? (parsed.verseEnd ? `${bookName} ${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}` : `${bookName} ${parsed.chapter}:${parsed.verseStart}`) : tooltipState.ref;
+        
+        const isDark = theme === 'dark';
+
+        if (!csvLoaded) {
+            expandedContent.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center p-6 text-center space-y-5">
+                    <div class="p-4 rounded-full border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}">
+                        <i data-lucide="upload" class="w-8 h-8 text-indigo-500 opacity-50"></i>
+                    </div>
+                    <p class="${isDark ? 'text-slate-400' : 'text-slate-500'} text-sm font-medium">CSV data required to view scripture.</p>
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-xl">Upload Bible CSV</button>
+                </div>`;
+            lucide.createIcons();
+            return;
+        }
+
+        const start = parseInt(parsed.verseStart), end = parsed.verseEnd ? parseInt(parsed.verseEnd) : start;
+        let html = `<div class="divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}">`;
+        for (let v = start; v <= Math.min(end, start + 50); v++) {
+            const key = `${parsed.bookId}-${parsed.chapter}-${v}`;
+            const text = bibleData[key] || "Verse not found.";
+            html += `
+                <div class="p-4 ${isDark ? 'bg-slate-900' : 'bg-white'}">
+                    ${end > start ? `<span class="text-sm font-bold block uppercase tracking-tight mb-2 text-indigo-500 opacity-80">${bookName} ${parsed.chapter}:${v}</span>` : ''}
+                    <p class="cursor-text text-[17px] leading-relaxed font-serif select-text ${isDark ? 'text-white' : 'text-slate-800'}">${highlightExistingQuotes(text)}</p>
+                </div>`;
+        }
+        html += '</div>';
+        expandedContent.innerHTML = html;
+    }
+
+    function highlightExistingQuotes(verseText) {
+        if (!tooltipState.currentLineText) return verseText;
+        const quoteRegex = /["“”]([^"“”]+)["“”]/g;
+        const matches = [...tooltipState.currentLineText.matchAll(quoteRegex)].map(m => m[1]);
+        if (!matches.length) return verseText;
+        let result = verseText;
+        const unique = [...new Set(matches.filter(q => q.trim() && q !== verseText && verseText.includes(q)))].sort((a,b) => b.length - a.length);
+        unique.forEach(q => {
+            const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'g');
+            result = result.replace(regex, `<span class="${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}">$1</span>`);
+        });
+        return result;
+    }
+
+    function handleCopyNotes() { copyToClipboard(content, 'copyNotesIcon'); }
+    function handleCopyVerse() {
+        const sel = window.getSelection().toString();
+        if (sel) { copyToClipboard(sel, 'copyIcon'); return; }
+        const parsed = parseVerseRef(tooltipState.ref);
+        if (!parsed || !csvLoaded) return;
+        let text = "";
+        const start = parseInt(parsed.verseStart), end = parsed.verseEnd ? parseInt(parsed.verseEnd) : start;
+        for (let v = start; v <= end; v++) {
+            const key = `${parsed.bookId}-${parsed.chapter}-${v}`;
+            text += `${DISPLAY_NAMES[parsed.bookId]} ${parsed.chapter}:${v}\n${bibleData[key] || "Verse not found."}\n\n`;
+        }
+        copyToClipboard(text.trim(), 'copyIcon');
+    }
+
+    function copyToClipboard(text, iconId) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            const icon = document.getElementById(iconId);
+            const old = icon.getAttribute('data-lucide');
+            icon.setAttribute('data-lucide', 'check');
+            icon.classList.add('text-emerald-500');
+            lucide.createIcons();
+            setTimeout(() => {
+                icon.setAttribute('data-lucide', old);
+                icon.classList.remove('text-emerald-500');
+                lucide.createIcons();
+            }, 2000);
+        } catch (err) {}
+        document.body.removeChild(textArea);
+    }
+
+    function handleQuote() {
+        if (!csvLoaded) return;
+        const sel = window.getSelection().toString();
+        let quote = sel;
+        if (!quote) {
+            const parsed = parseVerseRef(tooltipState.ref);
+            const start = parseInt(parsed.verseStart), end = parsed.verseEnd ? parseInt(parsed.verseEnd) : start;
+            for (let v = start; v <= end; v++) { quote += (bibleData[`${parsed.bookId}-${parsed.chapter}-${v}`] || "") + " "; }
+        }
+        let space = " ";
+        if (tooltipState.lineEndIndex > 0) {
+            const charBefore = content[tooltipState.lineEndIndex - 1];
+            if (charBefore === " " || charBefore === "\n") space = "";
+        } else if (tooltipState.lineEndIndex === 0) space = "";
+        const formatted = `${space}"${quote.trim()}"`;
+        content = content.slice(0, tooltipState.lineEndIndex) + formatted + content.slice(tooltipState.lineEndIndex);
+        
+        localStorage.setItem('bibleJournalContent', content); // Save to localStorage
+        
+        editor.value = content;
+        const prevNewline = content.lastIndexOf('\n', tooltipState.lineEndIndex);
+        const nextNewline = content.indexOf('\n', tooltipState.lineEndIndex + formatted.length);
+        const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
+        tooltipState.lineEndIndex = nextNewline === -1 ? content.length : nextNewline;
+        tooltipState.currentLineText = content.substring(lineStart, tooltipState.lineEndIndex);
+        renderBackdrop();
+        renderExpandedContent();
+    }
+
+    function startDrag(e) {
+        if (e.target.closest('button')) return;
+        isDragging = true;
+        const cx = e.clientX || (e.touches && e.touches[0].clientX);
+        const cy = e.clientY || (e.touches && e.touches[0].clientY);
+        interactionOffset.x = cx - tooltipState.x;
+        interactionOffset.y = cy - tooltipState.y;
+    }
+
+    function startResize(e) {
+        e.stopPropagation();
+        isResizing = true;
+        const cx = e.clientX || (e.touches && e.touches[0].clientX);
+        const cy = e.clientY || (e.touches && e.touches[0].clientY);
+        interactionOffset.x = cx;
+        interactionOffset.y = cy;
+        interactionOffset.w = tooltipState.width;
+        interactionOffset.h = tooltipState.height;
+    }
+
+    function onMouseMove(e) {
+        if (!isDragging && !isResizing) return;
+        const cx = e.clientX || (e.touches && e.touches[0].clientX);
+        const cy = e.clientY || (e.touches && e.touches[0].clientY);
+        if (isDragging) {
+            tooltipState.x = cx - interactionOffset.x;
+            tooltipState.y = cy - interactionOffset.y;
+            tooltip.style.left = tooltipState.x + 'px';
+            tooltip.style.top = tooltipState.y + 'px';
+        } else if (isResizing) {
+            tooltipState.width = Math.max(240, interactionOffset.w + (cx - interactionOffset.x));
+            tooltipState.height = Math.max(180, interactionOffset.h + (cy - interactionOffset.y));
+            tooltip.style.width = tooltipState.width + 'px';
+            tooltip.style.height = tooltipState.height + 'px';
+        }
+        if (e.cancelable) e.preventDefault();
+    }
+
+    function onMouseUp() { isDragging = false; isResizing = false; }
+
+    init();
+</script>
+</body>
+</html>
